@@ -19,6 +19,7 @@ import androidx.compose.material.icons.rounded.Store
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.*
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
@@ -889,7 +890,7 @@ fun MomoApp(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Icon(
-                                androidx.compose.material.icons.Icons.Default.Warning,
+                                Icons.Rounded.Warning,
                                 contentDescription = null,
                                 modifier = Modifier.size(28.dp)
                             )
