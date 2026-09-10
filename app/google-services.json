@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "505509478075",
+    "project_id": "momoswift-project",
+    "storage_bucket": "momoswift-project.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:505509478075:android:dfb42453f03e0aab42b39e",
+        "android_client_info": {
+          "package_name": "com.gbekonzy.momoswift"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "505509478075-5cp7j9970kpl4rl0eeape79aqlcrg329.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.gbekonzy.momoswift",
+            "certificate_hash": "0e28cf85e6af78053d317135f5f46b4f411c4e0a"
+          }
+        },
+        {
+          "client_id": "505509478075-fltev735r8gh6dlv5k8bqs3olkhis7p8.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBklCyA4AxH-1FngiNaQn0Bw1S4EMrWf44"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "505509478075-fltev735r8gh6dlv5k8bqs3olkhis7p8.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

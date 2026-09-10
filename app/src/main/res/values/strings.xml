@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Swift Agent</string>
+    <string name="ussd_service_description">Automates USSD menu interactions for mobile money transactions. This service reads USSD dialog screens and inputs menu selections, phone numbers, and amounts automatically. PIN entry is always left for manual input.</string>
+    <string name="default_web_client_id">505509478075-fltev735r8gh6dlv5k8bqs3olkhis7p8.apps.googleusercontent.com</string>
+</resources>

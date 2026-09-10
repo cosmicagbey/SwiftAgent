@@ -1,0 +1,30 @@
+﻿# Build outputs
+app/build/
+build/
+
+# Local config (never commit)
+local.properties
+*.hprof
+
+# Large binary files that don't belong in Git
+gradle-8.13-bin.zip
+*.zip
+
+# Scratch/debug logs
+build_log.txt
+build_log_2.txt
+current_build_log.txt
+build_output.txt
+check_braces.py
+
+# Drive upload temp
+.tmp.driveupload/
+
+# IDE
+.idea/
+*.iml
+.gradle/
+.vscode/
+
+# Node
+functions/node_modules/
