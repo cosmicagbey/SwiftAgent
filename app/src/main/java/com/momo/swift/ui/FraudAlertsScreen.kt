@@ -26,7 +26,6 @@ import androidx.compose.ui.unit.sp
 import com.momo.swift.data.FraudAlert
 import com.momo.swift.data.FraudDetectionManager
 import com.momo.swift.ui.components.BounceButton
-import com.momo.swift.ui.components.BounceFloatingActionButton
 import com.momo.swift.ui.components.BounceIconButton
 import java.text.SimpleDateFormat
 import java.util.*
@@ -80,7 +79,7 @@ fun FraudAlertsScreen(onBack: () -> Unit) {
                 actions = {
                     BounceIconButton(onClick = { showBroadcastDialog = true }) {
                         Icon(
-                            Icons.Default.Campaign,
+                            Icons.Default.Warning,
                             contentDescription = "Broadcast Alert",
                             tint = MaterialTheme.colorScheme.error
                         )
@@ -92,21 +91,14 @@ fun FraudAlertsScreen(onBack: () -> Unit) {
             )
         },
         floatingActionButton = {
-            BounceFloatingActionButton(
+            ExtendedFloatingActionButton(
                 onClick = { showBroadcastDialog = true },
                 containerColor = MaterialTheme.colorScheme.error,
                 contentColor = MaterialTheme.colorScheme.onError,
-                shape = CircleShape
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(Icons.Default.Campaign, contentDescription = null)
-                    Text("Broadcast Scammer", fontWeight = FontWeight.Bold)
-                }
-            }
+                shape = CircleShape,
+                icon = { Icon(Icons.Default.Warning, contentDescription = null) },
+                text = { Text("Broadcast Scammer", fontWeight = FontWeight.Bold) }
+            )
         }
     ) { paddingValues ->
         Column(

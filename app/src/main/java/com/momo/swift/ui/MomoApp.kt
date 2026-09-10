@@ -889,7 +889,7 @@ fun MomoApp(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Icon(
-                                androidx.compose.material.icons.Icons.Default.Campaign,
+                                androidx.compose.material.icons.Icons.Default.Warning,
                                 contentDescription = null,
                                 modifier = Modifier.size(28.dp)
                             )

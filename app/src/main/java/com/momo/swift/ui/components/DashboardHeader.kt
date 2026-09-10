@@ -152,7 +152,7 @@ fun DashboardHeader(
                             DropdownMenuItem(
                                 leadingIcon = {
                                     Icon(
-                                        Icons.Default.Campaign,
+                                        Icons.Default.Warning,
                                         contentDescription = null,
                                         tint = Color(0xFFD32F2F),
                                         modifier = Modifier.size(18.dp)
@@ -173,7 +173,7 @@ fun DashboardHeader(
                             DropdownMenuItem(
                                 leadingIcon = {
                                     Icon(
-                                        Icons.Default.Shield,
+                                        Icons.Default.Security,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(18.dp)
@@ -188,7 +188,7 @@ fun DashboardHeader(
                             DropdownMenuItem(
                                 leadingIcon = {
                                     Icon(
-                                        Icons.Default.ReportProblem,
+                                        Icons.Default.Info,
                                         contentDescription = null,
                                         tint = Color(0xFFE65100),
                                         modifier = Modifier.size(18.dp)
