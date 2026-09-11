@@ -101,7 +101,8 @@ object FraudDetectionManager {
         phoneNumber: String,
         fraudType: String,
         description: String,
-        reporterPhone: String = ""
+        reporterPhone: String = "",
+        evidencePhotoBase64: String? = null
     ): Result<String> {
         return try {
             val db = firestore ?: FirebaseFirestore.getInstance()
@@ -112,7 +113,7 @@ object FraudDetectionManager {
             val userUid = auth.currentUser?.uid ?: "anonymous"
 
             val docRef = db.collection(COLLECTION_NAME).document()
-            val alertData = hashMapOf(
+            val alertData = hashMapOf<String, Any>(
                 "id" to docRef.id,
                 "phoneNumber" to rawPhone,
                 "normalizedNumber" to normalizedPhone,
@@ -125,6 +126,10 @@ object FraudDetectionManager {
                 "broadcastLevel" to "CRITICAL",
                 "isVerified" to true
             )
+
+            if (!evidencePhotoBase64.isNullOrBlank()) {
+                alertData["evidencePhotoBase64"] = evidencePhotoBase64
+            }
 
             docRef.set(alertData).await()
             

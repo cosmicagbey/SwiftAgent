@@ -20,6 +20,8 @@ import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
@@ -1042,6 +1044,90 @@ fun MomoApp(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("Later", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        }
+                    }
+                )
+            }
+
+            // Nationwide Incoming Scammer Alert Dialog
+            incomingFraudAlert?.let { alert ->
+                AlertDialog(
+                    onDismissRequest = { incomingFraudAlert = null },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Rounded.Warning,
+                            contentDescription = "Scammer Alert",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(44.dp)
+                        )
+                    },
+                    title = {
+                        Text(
+                            text = "🚨 NATIONWIDE SCAMMER ALERT",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center
+                        )
+                    },
+                    text = {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(
+                                        text = "Scammer Phone Number:",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
+                                    )
+                                    Text(
+                                        text = alert.phoneNumber,
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "Category: ${alert.fraudType}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                    if (alert.description.isNotBlank()) {
+                                        Text(
+                                            text = alert.description,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                    }
+                                }
+                            }
+
+                            Text(
+                                text = "🛡️ This number was just broadcasted by another agent and saved to your blacklist memory. If someone attempts a cashout with this number at your shop, SwiftAgent will block them and let you capture their face.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        BounceButton(
+                            onClick = { incomingFraudAlert = null },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            ),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("I Understand • Be on Alert", fontWeight = FontWeight.Bold)
                         }
                     }
                 )

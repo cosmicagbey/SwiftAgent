@@ -13,6 +13,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,18 +43,20 @@ import java.io.File
  * Four-phase fraud interception modal.
  *
  * Phase 0 — AGENT ALERT (private):
- *   Agent sees scammer warning. Chooses: Capture Evidence | Proceed Anyway | Decline & Clear.
+ *   Agent sees scammer warning + 3 choices.
  *
- * Phase 1 — INVISIBLE COUNTDOWN (private):
- *   3-second haptic countdown. Escalating vibrations let agent feel when to flip phone.
- *   Camera fires silently only if agent chose "Capture Evidence".
- *   Ends with a strong double-buzz = "Flip now!"
+ * Phase 1 — INVISIBLE COUNTDOWN + CAPTURE:
+ *   3-second escalating haptic countdown (invisible to customer).
+ *   Front camera silently fires 3 photos if agent chose capture.
+ *   Ends with strong double-buzz = "Flip now".
  *
- * Phase 2 — CUSTOMER FACING (public):
- *   "Please Confirm Details" screen shown to customer.
+ * Phase 2 — CLEAN TRANSACTION SCREEN (customer-facing):
+ *   Just the number + amount. No banners, no hints, nothing suspicious.
+ *   Agent taps anywhere on screen (invisible) to return to private view.
  *
  * Phase 3 — AGENT SUMMARY (private):
- *   Agent sees evidence badge + security guidance + action buttons.
+ *   Evidence saved silently. Agent sees badge, options, and can decline/proceed.
+ *   Evidence is accessible later from Broadcast dialog.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,6 +73,7 @@ fun CustomerVerificationModal(
     val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
 
+    // 0=Agent alert, 1=Countdown+capture, 2=Customer-facing, 3=Agent summary
     var phase by remember { mutableStateOf(0) }
     var captureRequested by remember { mutableStateOf(false) }
     var capturedPhotos by remember { mutableStateOf<List<File>>(emptyList()) }
@@ -89,7 +94,7 @@ fun CustomerVerificationModal(
         }
     }
 
-    // Phase 1: start haptic countdown + optionally capture in parallel
+    // Phase 1: run countdown + optionally capture in parallel
     LaunchedEffect(phase) {
         if (phase != 1) return@LaunchedEffect
 
@@ -109,12 +114,11 @@ fun CustomerVerificationModal(
             }
         }
 
-        // 3-second escalating haptic countdown
+        // Escalating haptic countdown: 3 ticks then double-buzz
         for (i in 3 downTo 1) {
             fireCountdownHaptic(context, i)
             delay(1000L)
         }
-        // Double-buzz = "Flip now!"
         fireFlipNowHaptic(context)
         delay(200L)
         phase = 2
@@ -148,7 +152,7 @@ fun CustomerVerificationModal(
                             Icon(Icons.Default.Shield, contentDescription = null,
                                 tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(36.dp))
                             Column {
-                                Text("⚠️ SCAMMER DETECTED",
+                                Text("SCAMMER DETECTED",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.error)
@@ -176,7 +180,7 @@ fun CustomerVerificationModal(
 
                         Surface(color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
-                            Text("🛡️ Ask customer for Ghana Card. Match name with wallet. If names differ — DECLINE immediately.",
+                            Text("Ask customer for Ghana Card. Match name with wallet. If names differ — DECLINE immediately.",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -190,7 +194,7 @@ fun CustomerVerificationModal(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Icon(Icons.Default.Vibration, contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                                Text("Your phone will vibrate a 3-second countdown. Flip screen to customer when you feel the double buzz.",
+                                Text("Your phone vibrates a 3-second countdown. Flip screen to customer on the double buzz. Tap anywhere to return to this screen.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer)
                             }
@@ -216,46 +220,66 @@ fun CustomerVerificationModal(
                             modifier = Modifier.padding(horizontal = 16.dp))
                     }
 
-                    // ── Phase 2: Customer-Facing Confirm Screen ───────────────
-                    2 -> Column(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    // ── Phase 2: Clean Customer-Facing Transaction Screen ──────
+                    // No banners, no hints. Looks like normal app screen.
+                    // Invisible full-area tap returns agent to private view.
+                    2 -> Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ) { phase = 3 }
                     ) {
-                        Surface(color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(10.dp)) {
-                            Text("📱 HOLD SCREEN TOWARDS CUSTOMER TO CONFIRM",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                textAlign = TextAlign.Center)
-                        }
-                        Text("Please Confirm Details",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface)
-                        Surface(color = MaterialTheme.colorScheme.surfaceVariant,
-                            shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.fillMaxWidth().padding(20.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Text("PHONE NUMBER", style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(phoneNumber,
-                                    style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp),
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = MaterialTheme.colorScheme.primary)
-                                if (amount.isNotBlank()) {
-                                    Spacer(Modifier.height(4.dp))
-                                    Text("AMOUNT", style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text("GHS $amount",
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface)
-                                }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // Swift Agent branding strip (looks natural)
+                            Surface(
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("SWIFT AGENT  •  MOBILE MONEY",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                    letterSpacing = 1.5.sp,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp))
                             }
+
+                            Spacer(Modifier.height(8.dp))
+
+                            // Number — big and clear
+                            Text("PHONE NUMBER",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                letterSpacing = 1.sp)
+                            Text(phoneNumber,
+                                style = MaterialTheme.typography.displaySmall.copy(fontSize = 34.sp),
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.primary)
+
+                            // Amount — if present
+                            if (amount.isNotBlank()) {
+                                Spacer(Modifier.height(8.dp))
+                                HorizontalDivider(modifier = Modifier.fillMaxWidth(0.5f),
+                                    color = MaterialTheme.colorScheme.outlineVariant)
+                                Spacer(Modifier.height(8.dp))
+                                Text("AMOUNT",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    letterSpacing = 1.sp)
+                                Text("GHS $amount",
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface)
+                            }
+
+                            Spacer(Modifier.height(24.dp))
                         }
                     }
 
@@ -282,6 +306,7 @@ fun CustomerVerificationModal(
                             }
                         }
 
+                        // Evidence badge — no count mentioned to avoid info leak
                         Surface(
                             color = if (capturedPhotos.isNotEmpty())
                                 MaterialTheme.colorScheme.primaryContainer
@@ -291,30 +316,34 @@ fun CustomerVerificationModal(
                             Row(modifier = Modifier.padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Icon(if (capturedPhotos.isNotEmpty()) Icons.Default.CameraAlt
-                                    else Icons.Default.Warning, contentDescription = null,
-                                    tint = if (capturedPhotos.isNotEmpty())
-                                        MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(
-                                    if (capturedPhotos.isNotEmpty())
-                                        "📸 ${capturedPhotos.size} Facial Evidence Photos Captured & Stored"
-                                    else if (captureRequested)
-                                        "⚠️ Camera capture was attempted — no photos saved"
-                                    else
-                                        "ℹ️ No evidence capture requested",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (capturedPhotos.isNotEmpty())
-                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                    else MaterialTheme.colorScheme.onSurface)
+                                Icon(
+                                    if (capturedPhotos.isNotEmpty()) Icons.Default.CameraAlt else Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = if (capturedPhotos.isNotEmpty()) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant)
+                                Column {
+                                    Text(
+                                        if (capturedPhotos.isNotEmpty()) "Evidence photos saved to secure gallery"
+                                        else if (captureRequested) "Camera capture attempted — check permissions"
+                                        else "No evidence capture was requested",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (capturedPhotos.isNotEmpty())
+                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                        else MaterialTheme.colorScheme.onSurface)
+                                    if (capturedPhotos.isNotEmpty()) {
+                                        Text("Attach photos from Evidence Gallery when broadcasting",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f))
+                                    }
+                                }
                             }
                         }
 
                         Surface(color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
                             shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.padding(12.dp)) {
-                                Text("Flagged Reason: ${fraudAlert.fraudType}",
+                                Text("Flagged: ${fraudAlert.fraudType}",
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onErrorContainer)
@@ -327,7 +356,7 @@ fun CustomerVerificationModal(
                             }
                         }
 
-                        Text("🛡️ AGENT GUIDANCE:\n1. Demand customer's physical Ghana Card.\n2. Match the name with the MoMo wallet registration.\n3. If names do not match, DECLINE cash-out immediately.",
+                        Text("1. Demand customer's Ghana Card.\n2. Match name with MoMo wallet registration.\n3. If names differ — DECLINE immediately.",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface)
@@ -348,17 +377,10 @@ fun CustomerVerificationModal(
                     Spacer(Modifier.width(6.dp))
                     Text("Capture Evidence", fontWeight = FontWeight.Bold)
                 }
-                2 -> BounceButton(
-                    onClick = { phase = 3 },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary),
-                    shape = RoundedCornerShape(10.dp)
-                ) { Text("Customer Confirmed", fontWeight = FontWeight.Bold) }
                 3 -> BounceButton(
                     onClick = {
                         onDismiss()
-                        Toast.makeText(context, "Transaction safely cancelled.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Transaction cancelled.", Toast.LENGTH_SHORT).show()
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error,
@@ -376,7 +398,7 @@ fun CustomerVerificationModal(
                     BounceTextButton(
                         onClick = {
                             onDismiss()
-                            Toast.makeText(context, "Transaction safely cancelled.", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Transaction cancelled.", Toast.LENGTH_SHORT).show()
                         },
                         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                     ) { Text("Decline & Clear") }

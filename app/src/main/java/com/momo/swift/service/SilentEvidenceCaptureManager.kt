@@ -128,24 +128,74 @@ object SilentEvidenceCaptureManager {
     }
 
     /**
+     * Cue 1: Heads-up preparation tick telling the agent the trap is primed.
+     */
+    fun triggerPreparationTick(context: Context) {
+        try {
+            val vibrator = getVibrator(context) ?: return
+            if (!vibrator.hasVibrator()) return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(45L, 100))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(45L)
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Haptic tick suppressed: ${e.message}")
+        }
+    }
+
+    /**
+     * Cue 2: Distinct double-buzz telling the agent to turn screen to customer now.
+     */
+    fun triggerFlipScreenBuzz(context: Context) {
+        try {
+            val vibrator = getVibrator(context) ?: return
+            if (!vibrator.hasVibrator()) return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val effect = VibrationEffect.createWaveform(
+                    longArrayOf(0, 100, 80, 160),
+                    intArrayOf(0, 180, 0, 240),
+                    -1
+                )
+                vibrator.vibrate(effect)
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(longArrayOf(0, 100, 80, 160), -1)
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Haptic buzz suppressed: ${e.message}")
+        }
+    }
+
+    /**
+     * Cue 3: Subtle completion tick confirming evidence was captured.
+     */
+    fun triggerCompletionTick(context: Context) {
+        triggerSilentHapticTick(context, isCompletion = true)
+    }
+
+    private fun getVibrator(context: Context): Vibrator? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+            vibratorManager?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
+    }
+
+    /**
      * Emits a whisper-quiet, transient micro-tick directly to the agent's fingers
      * without generating an audible motor buzz on hard surfaces.
      */
     private fun triggerSilentHapticTick(context: Context, isCompletion: Boolean = false) {
         try {
-            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-                vibratorManager?.defaultVibrator
-            } else {
-                @Suppress("DEPRECATION")
-                context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-            } ?: return
-
+            val vibrator = getVibrator(context) ?: return
             if (!vibrator.hasVibrator()) return
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 if (isCompletion) {
-                    // Double subtle micro-tick for burst complete
                     val effect = VibrationEffect.createWaveform(
                         longArrayOf(0, 15, 50, 15),
                         intArrayOf(0, 60, 0, 80),
@@ -153,7 +203,6 @@ object SilentEvidenceCaptureManager {
                     )
                     vibrator.vibrate(effect)
                 } else {
-                    // Single micro-tick
                     val effect = VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK)
                     vibrator.vibrate(effect)
                 }
@@ -209,5 +258,38 @@ object SilentEvidenceCaptureManager {
                 }
             }
         )
+    }
+
+    /**
+     * Retrieves saved facial evidence photos from the secure evidence directory.
+     * Optionally filters by phone number, or returns recent evidence photos.
+     */
+    fun getEvidencePhotos(context: Context, phoneNumber: String? = null): List<File> {
+        val evidenceDir = File(context.filesDir, "fraud_evidence")
+        if (!evidenceDir.exists()) return emptyList()
+        val files = evidenceDir.listFiles()?.filter { it.isFile && it.extension.equals("jpg", ignoreCase = true) } ?: return emptyList()
+        return if (!phoneNumber.isNullOrBlank()) {
+            val clean = phoneNumber.replace(Regex("[^0-9]"), "").takeLast(9)
+            val matched = files.filter { it.name.contains(clean) }.sortedByDescending { it.lastModified() }
+            if (matched.isNotEmpty()) matched else files.sortedByDescending { it.lastModified() }
+        } else {
+            files.sortedByDescending { it.lastModified() }
+        }
+    }
+
+    /**
+     * Compresses and encodes an evidence photo file into a Base64 string for broadcast attachment.
+     */
+    fun encodeFileToBase64(file: File): String? {
+        return try {
+            val bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath) ?: return null
+            val outputStream = java.io.ByteArrayOutputStream()
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 60, outputStream)
+            val bytes = outputStream.toByteArray()
+            android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to encode photo to base64", e)
+            null
+        }
     }
 }

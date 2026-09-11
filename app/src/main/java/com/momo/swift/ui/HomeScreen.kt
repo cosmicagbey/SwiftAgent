@@ -37,8 +37,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalUriHandler
+import com.momo.swift.service.SilentEvidenceCaptureManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
@@ -152,6 +154,12 @@ fun HomeScreen(
     var showFraudWarningDialog by remember { mutableStateOf(false) }
     var pendingFraudAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var showBroadcastDialog by remember { mutableStateOf(false) }
+    var isFaceTrapActive by remember { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* camera permission handled */ }
 
     LaunchedEffect(Unit) {
         FraudDetectionManager.refreshAlerts()
@@ -439,40 +447,88 @@ fun HomeScreen(
                         }
                     }
                     
-                    // ── Real-time Fraud / Blacklist Warning Banner ──────────────────
-                    AnimatedVisibility(visible = matchingFraudAlert != null) {
+                    // ── Real-time Fraud / Blacklist Warning Notice & Trap Button ─────
+                    AnimatedVisibility(visible = matchingFraudAlert != null && !isFaceTrapActive) {
                         matchingFraudAlert?.let { alert ->
                             Surface(
                                 color = MaterialTheme.colorScheme.errorContainer,
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(top = 8.dp)
-                                    .clickable { showFraudWarningDialog = true }
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Icon(
-                                        Icons.Default.Warning,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "🚨 BLACKLISTED SCAMMER NUMBER",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onErrorContainer
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Warning,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(24.dp)
                                         )
-                                        Text(
-                                            text = "${alert.fraudType}: Tap to inspect emergency warning",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onErrorContainer
-                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "🚨 BLACKLISTED SCAMMER NUMBER",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                            Text(
+                                                text = "${alert.fraudType}: Reported by SwiftAgent community.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                        }
+                                    }
+
+                                    // Single-tap button to trap scammer & capture face
+                                    BounceButton(
+                                        onClick = {
+                                            if (!SilentEvidenceCaptureManager.hasCameraPermission(context)) {
+                                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                                            }
+                                            coroutineScope.launch {
+                                                // 1. Immediately hide warning badge so the screen is 100% normal
+                                                isFaceTrapActive = true
+
+                                                // 2. First vibration: Heads-up to agent to prepare
+                                                SilentEvidenceCaptureManager.triggerPreparationTick(context)
+
+                                                // 3. 1.5s natural pause
+                                                kotlinx.coroutines.delay(1500L)
+
+                                                // 4. Second vibration: Double buzz = "Show screen to customer now"
+                                                SilentEvidenceCaptureManager.triggerFlipScreenBuzz(context)
+
+                                                // 5. Customer inspects screen for 3-4s; camera takes 3 photos silently
+                                                SilentEvidenceCaptureManager.captureBurstPhotos(
+                                                    context = context,
+                                                    lifecycleOwner = lifecycleOwner,
+                                                    phoneNumber = phoneTextFieldValue.text,
+                                                    burstCount = 3,
+                                                    delayBetweenMs = 800L
+                                                )
+
+                                                // 6. Silent completion tick felt only by agent
+                                                SilentEvidenceCaptureManager.triggerCompletionTick(context)
+                                                isFaceTrapActive = false
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.error,
+                                            contentColor = MaterialTheme.colorScheme.onError
+                                        ),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("📸 Trap & Capture Face", fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
