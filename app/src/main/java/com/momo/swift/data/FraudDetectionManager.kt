@@ -126,6 +126,27 @@ object FraudDetectionManager {
             )
 
             docRef.set(alertData).await()
+            
+            // Optimistically update local state and disk cache immediately
+            val newAlert = FraudAlert(
+                id = docRef.id,
+                phoneNumber = rawPhone,
+                normalizedNumber = normalizedPhone,
+                fraudType = fraudType,
+                description = description,
+                reporterEmail = userEmail,
+                reporterPhone = reporterPhone,
+                reportedAt = System.currentTimeMillis(),
+                broadcastLevel = "CRITICAL",
+                isVerified = true
+            )
+            val currentList = _alertsFlow.value.toMutableList()
+            if (currentList.none { it.id == docRef.id }) {
+                currentList.add(0, newAlert)
+                _alertsFlow.value = currentList
+                saveAlertsToCache(currentList)
+            }
+
             Log.d(TAG, "Successfully broadcasted fraud alert for $rawPhone")
             Result.success(docRef.id)
         } catch (e: Exception) {
