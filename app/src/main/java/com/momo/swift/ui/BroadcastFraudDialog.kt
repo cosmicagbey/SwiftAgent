@@ -180,6 +180,7 @@ fun BroadcastFraudDialog(
                         isLoading = false
                         result.fold(
                             onSuccess = {
+                                FraudDetectionManager.refreshAlerts()
                                 onBroadcastSuccess(phoneNumber)
                             },
                             onFailure = { e ->

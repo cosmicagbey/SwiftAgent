@@ -153,6 +153,10 @@ fun HomeScreen(
     var pendingFraudAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var showBroadcastDialog by remember { mutableStateOf(false) }
 
+    LaunchedEffect(Unit) {
+        FraudDetectionManager.refreshAlerts()
+    }
+
     fun executeTransaction(
         tx: UssdTransaction,
         baseCode: String = "*171#",

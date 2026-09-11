@@ -39,6 +39,10 @@ fun FraudAlertsScreen(onBack: () -> Unit) {
     var searchQuery by remember { mutableStateOf("") }
     var showBroadcastDialog by remember { mutableStateOf(false) }
 
+    LaunchedEffect(Unit) {
+        FraudDetectionManager.refreshAlerts()
+    }
+
     val filteredAlerts = remember(alerts, searchQuery) {
         if (searchQuery.isBlank()) {
             alerts
@@ -60,7 +64,7 @@ fun FraudAlertsScreen(onBack: () -> Unit) {
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Shield,
+                            imageVector = Icons.Default.Security,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(24.dp)
@@ -77,6 +81,13 @@ fun FraudAlertsScreen(onBack: () -> Unit) {
                     }
                 },
                 actions = {
+                    BounceIconButton(onClick = { FraudDetectionManager.refreshAlerts() }) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "Refresh",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     BounceIconButton(onClick = { showBroadcastDialog = true }) {
                         Icon(
                             Icons.Default.Warning,

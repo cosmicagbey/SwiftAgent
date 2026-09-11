@@ -3,6 +3,7 @@ package com.momo.swift.data
 import android.content.Context
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
@@ -155,12 +156,49 @@ object FraudDetectionManager {
         }
     }
 
-    private fun startRealtimeSync() {
-        val db = firestore ?: return
+    fun parseDocument(doc: DocumentSnapshot): FraudAlert? {
+        return try {
+            val id = doc.id
+            val phone = doc.getString("phoneNumber") ?: ""
+            if (phone.isBlank()) return null
+            val normalized = doc.getString("normalizedNumber") ?: normalizePhone(phone)
+            val fraudType = doc.getString("fraudType") ?: "Scam"
+            val desc = doc.getString("description") ?: ""
+            val reporterEmail = doc.getString("reporterEmail") ?: ""
+            val reporterPhone = doc.getString("reporterPhone") ?: ""
+            val timestamp = try {
+                doc.getTimestamp("reportedAt")?.toDate()?.time
+                    ?: doc.getLong("reportedAt")
+                    ?: 0L
+            } catch (e: Exception) {
+                0L
+            }
+            val level = doc.getString("broadcastLevel") ?: "CRITICAL"
+            val verified = doc.getBoolean("isVerified") ?: true
+
+            FraudAlert(
+                id = id,
+                phoneNumber = phone,
+                normalizedNumber = normalized,
+                fraudType = fraudType,
+                description = desc,
+                reporterEmail = reporterEmail,
+                reporterPhone = reporterPhone,
+                reportedAt = timestamp,
+                broadcastLevel = level,
+                isVerified = verified
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error parsing fraud alert document ${doc.id}", e)
+            null
+        }
+    }
+
+    fun startRealtimeSync() {
+        val db = firestore ?: FirebaseFirestore.getInstance()
         listenerRegistration?.remove()
 
         listenerRegistration = db.collection(COLLECTION_NAME)
-            .orderBy("reportedAt", Query.Direction.DESCENDING)
             .limit(100)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
@@ -169,38 +207,8 @@ object FraudDetectionManager {
                 }
 
                 if (snapshot != null) {
-                    val alerts = mutableListOf<FraudAlert>()
-                    for (doc in snapshot.documents) {
-                        try {
-                            val id = doc.id
-                            val phone = doc.getString("phoneNumber") ?: ""
-                            val normalized = doc.getString("normalizedNumber") ?: normalizePhone(phone)
-                            val fraudType = doc.getString("fraudType") ?: "Scam"
-                            val desc = doc.getString("description") ?: ""
-                            val reporterEmail = doc.getString("reporterEmail") ?: ""
-                            val reporterPhone = doc.getString("reporterPhone") ?: ""
-                            val timestamp = doc.getTimestamp("reportedAt")?.toDate()?.time ?: 0L
-                            val level = doc.getString("broadcastLevel") ?: "CRITICAL"
-                            val verified = doc.getBoolean("isVerified") ?: true
-
-                            alerts.add(
-                                FraudAlert(
-                                    id = id,
-                                    phoneNumber = phone,
-                                    normalizedNumber = normalized,
-                                    fraudType = fraudType,
-                                    description = desc,
-                                    reporterEmail = reporterEmail,
-                                    reporterPhone = reporterPhone,
-                                    reportedAt = timestamp,
-                                    broadcastLevel = level,
-                                    isVerified = verified
-                                )
-                            )
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error parsing fraud alert document ${doc.id}", e)
-                        }
-                    }
+                    val alerts = snapshot.documents.mapNotNull { parseDocument(it) }
+                        .sortedByDescending { it.reportedAt }
 
                     val previousIds = _alertsFlow.value.map { it.id }.toSet()
                     _alertsFlow.value = alerts
@@ -215,6 +223,30 @@ object FraudDetectionManager {
                     }
                 }
             }
+    }
+
+    fun refreshAlerts() {
+        scope.launch {
+            try {
+                val db = firestore ?: FirebaseFirestore.getInstance()
+                if (listenerRegistration == null) {
+                    startRealtimeSync()
+                }
+                val snapshot = db.collection(COLLECTION_NAME)
+                    .limit(100)
+                    .get()
+                    .await()
+                val alerts = snapshot.documents.mapNotNull { parseDocument(it) }
+                    .sortedByDescending { it.reportedAt }
+                if (alerts.isNotEmpty()) {
+                    _alertsFlow.value = alerts
+                    saveAlertsToCache(alerts)
+                    Log.d(TAG, "Refreshed ${alerts.size} fraud alerts from Firestore")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to refresh alerts via get()", e)
+            }
+        }
     }
 
     private fun loadCachedAlerts() {
