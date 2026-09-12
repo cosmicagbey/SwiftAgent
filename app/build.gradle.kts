@@ -38,8 +38,8 @@ android {
         applicationId = "com.gbekonzy.momoswift"
         minSdk = 24
         targetSdk = 36
-        versionCode = 43
-        versionName = "1.1.3"
+        versionCode = 44
+        versionName = "1.1.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -139,8 +139,8 @@ dependencies {
     implementation("com.google.android.play:app-update:2.1.0")
     implementation("com.google.android.play:app-update-ktx:2.1.0")
 
-    // CameraX for silent evidence & fraud facial capture
-    val cameraxVersion = "1.3.1"
+    // CameraX for silent evidence & fraud facial capture (1.4.1+ supports 16 KB page sizes)
+    val cameraxVersion = "1.4.1"
     implementation("androidx.camera:camera-core:$cameraxVersion")
     implementation("androidx.camera:camera-camera2:$cameraxVersion")
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
