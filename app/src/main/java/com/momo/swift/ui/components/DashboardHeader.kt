@@ -27,7 +27,8 @@ fun DashboardHeader(
     onCheckBalance: () -> Unit,
     onBroadcastScammer: () -> Unit = {},
     onOpenFraudRegistry: () -> Unit = {},
-    onReportFraud: () -> Unit = {}
+    onReportFraud: () -> Unit = {},
+    onOpenEvidenceVault: () -> Unit = {}
 ) {
     // Show the disclosure automatically when accessibility is off.
     // hasDeclinedThisSession persists across recompositions within the same session;
@@ -198,6 +199,21 @@ fun DashboardHeader(
                                 onClick = {
                                     menuExpanded = false
                                     onReportFraud()
+                                }
+                            )
+                            DropdownMenuItem(
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.PhotoLibrary,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                },
+                                text = { Text("Evidence Photo Vault") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onOpenEvidenceVault()
                                 }
                             )
                         }

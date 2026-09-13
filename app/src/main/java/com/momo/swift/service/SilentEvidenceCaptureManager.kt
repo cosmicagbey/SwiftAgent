@@ -2,8 +2,10 @@ package com.momo.swift.service
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.util.Log
+import androidx.core.content.FileProvider
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -96,19 +98,23 @@ object SilentEvidenceCaptureManager {
                 if (!exists()) mkdirs()
             }
 
+            // Allow camera sensor brief moment to stabilize exposure
+            delay(350L)
+
             val capturedFiles = mutableListOf<File>()
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
             val cleanPhone = phoneNumber.replace(Regex("[^0-9]"), "").takeLast(10)
 
-            // Capture burst shots
+            // Capture burst shots with perceptible tactile tick on each snap
             for (i in 1..burstCount) {
                 val photoFile = File(evidenceDir, "evidence_${cleanPhone}_${timestamp}_$i.jpg")
                 val success = captureSinglePhoto(context, imageCapture, photoFile)
                 if (success && photoFile.exists() && photoFile.length() > 0) {
                     capturedFiles.add(photoFile)
                     Log.d(TAG, "Captured evidence frame $i: ${photoFile.absolutePath} (${photoFile.length()} bytes)")
-                    triggerSilentHapticTick(context, isCompletion = (i == burstCount))
                 }
+                // Solid, distinct tick felt by the agent for each picture snapped
+                triggerPhotoCapturedTick(context, i)
                 if (i < burstCount) {
                     delay(delayBetweenMs)
                 }
@@ -116,6 +122,9 @@ object SilentEvidenceCaptureManager {
 
             // Unbind camera immediately after burst is complete
             cameraProvider.unbindAll()
+
+            // Distinct triple-pulse buzz telling agent: "Capture complete! You can pull the phone back."
+            triggerCaptureFinishedHaptic(context)
 
             return@withContext capturedFiles
         } catch (e: Exception) {
@@ -135,10 +144,10 @@ object SilentEvidenceCaptureManager {
             val vibrator = getVibrator(context) ?: return
             if (!vibrator.hasVibrator()) return
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createOneShot(45L, 100))
+                vibrator.vibrate(VibrationEffect.createOneShot(50L, 120))
             } else {
                 @Suppress("DEPRECATION")
-                vibrator.vibrate(45L)
+                vibrator.vibrate(50L)
             }
         } catch (e: Exception) {
             Log.d(TAG, "Haptic tick suppressed: ${e.message}")
@@ -169,10 +178,52 @@ object SilentEvidenceCaptureManager {
     }
 
     /**
-     * Cue 3: Subtle completion tick confirming evidence was captured.
+     * Cue 3: Crisp, distinct tick felt on EACH photo snap so the agent tracks progress.
+     */
+    fun triggerPhotoCapturedTick(context: Context, photoIndex: Int) {
+        try {
+            val vibrator = getVibrator(context) ?: return
+            if (!vibrator.hasVibrator()) return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(55L, 160))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(55L)
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Photo tick suppressed: ${e.message}")
+        }
+    }
+
+    /**
+     * Cue 4: Distinct triple-pulse buzz telling agent:
+     * "All pictures are taken! Safely pull the phone back."
+     */
+    fun triggerCaptureFinishedHaptic(context: Context) {
+        try {
+            val vibrator = getVibrator(context) ?: return
+            if (!vibrator.hasVibrator()) return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val effect = VibrationEffect.createWaveform(
+                    longArrayOf(0, 75, 70, 75, 70, 140),
+                    intArrayOf(0, 180, 0, 180, 0, 240),
+                    -1
+                )
+                vibrator.vibrate(effect)
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(longArrayOf(0, 75, 70, 75, 70, 140), -1)
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Completion haptic suppressed: ${e.message}")
+        }
+    }
+
+    /**
+     * Backward-compatibility wrapper for completion tick.
      */
     fun triggerCompletionTick(context: Context) {
-        triggerSilentHapticTick(context, isCompletion = true)
+        triggerCaptureFinishedHaptic(context)
     }
 
     private fun getVibrator(context: Context): Vibrator? {
@@ -182,40 +233,6 @@ object SilentEvidenceCaptureManager {
         } else {
             @Suppress("DEPRECATION")
             context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-        }
-    }
-
-    /**
-     * Emits a whisper-quiet, transient micro-tick directly to the agent's fingers
-     * without generating an audible motor buzz on hard surfaces.
-     */
-    private fun triggerSilentHapticTick(context: Context, isCompletion: Boolean = false) {
-        try {
-            val vibrator = getVibrator(context) ?: return
-            if (!vibrator.hasVibrator()) return
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                if (isCompletion) {
-                    val effect = VibrationEffect.createWaveform(
-                        longArrayOf(0, 15, 50, 15),
-                        intArrayOf(0, 60, 0, 80),
-                        -1
-                    )
-                    vibrator.vibrate(effect)
-                } else {
-                    val effect = VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK)
-                    vibrator.vibrate(effect)
-                }
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val duration = if (isCompletion) 25L else 12L
-                val effect = VibrationEffect.createOneShot(duration, 50)
-                vibrator.vibrate(effect)
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator.vibrate(if (isCompletion) 25L else 12L)
-            }
-        } catch (e: Exception) {
-            Log.d(TAG, "Haptic tick suppressed: ${e.message}")
         }
     }
 
@@ -290,6 +307,60 @@ object SilentEvidenceCaptureManager {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to encode photo to base64", e)
             null
+        }
+    }
+
+    /**
+     * Shares one or more evidence photos to external apps (WhatsApp, Email, Telegram, etc.)
+     * using Android FileProvider.
+     */
+    fun sharePhotos(context: Context, photos: List<File>, caption: String = "Suspected MoMo Fraudster Evidence") {
+        if (photos.isEmpty()) return
+        try {
+            val uris = photos.mapNotNull { file ->
+                try {
+                    FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to create URI for ${file.name}", e)
+                    null
+                }
+            }
+            if (uris.isEmpty()) return
+
+            val intent = if (uris.size == 1) {
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "image/jpeg"
+                    putExtra(Intent.EXTRA_STREAM, uris.first())
+                    putExtra(Intent.EXTRA_TEXT, caption)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            } else {
+                Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                    type = "image/jpeg"
+                    putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+                    putExtra(Intent.EXTRA_TEXT, caption)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            }
+            context.startActivity(Intent.createChooser(intent, "Share Evidence Photos via"))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to launch share sheet", e)
+        }
+    }
+
+    /**
+     * Safely deletes a photo file from the evidence directory.
+     */
+    fun deletePhoto(file: File): Boolean {
+        return try {
+            if (file.exists()) file.delete() else false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to delete file ${file.name}", e)
+            false
         }
     }
 }

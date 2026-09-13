@@ -60,10 +60,12 @@ fun BroadcastFraudDialog(
     var selectedCategory by remember { mutableStateOf(fraudCategories[0]) }
     var isCategoryDropdownExpanded by remember { mutableStateOf(false) }
 
-    val availablePhotos = remember(phoneNumber) {
-        SilentEvidenceCaptureManager.getEvidencePhotos(context, phoneNumber)
+    var availablePhotos by remember(phoneNumber) {
+        mutableStateOf(SilentEvidenceCaptureManager.getEvidencePhotos(context, phoneNumber))
     }
     var selectedPhotoFile by remember { mutableStateOf<File?>(availablePhotos.firstOrNull()) }
+    var previewPhoto by remember { mutableStateOf<File?>(null) }
+    var showFullGallery by remember { mutableStateOf(false) }
 
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -171,24 +173,37 @@ fun BroadcastFraudDialog(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Row(
+                                modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Icon(
-                                    Icons.Default.CameraAlt,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = "Attach Captured Photo Evidence (${availablePhotos.size} saved)",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.CameraAlt,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "Photo Evidence (${availablePhotos.size} saved)",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                TextButton(
+                                    onClick = { showFullGallery = true },
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(26.dp)
+                                ) {
+                                    Text("Open Vault", style = MaterialTheme.typography.labelSmall)
+                                }
                             }
                             Text(
-                                text = "Select a photo to attach to this broadcast report:",
+                                text = "Select a photo to attach, or tap 🔍 to view full size:",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                             )
@@ -209,7 +224,7 @@ fun BroadcastFraudDialog(
 
                                     Box(
                                         modifier = Modifier
-                                            .size(72.dp)
+                                            .size(76.dp)
                                             .clip(RoundedCornerShape(8.dp))
                                             .border(
                                                 width = if (isSelected) 3.dp else 1.dp,
@@ -244,6 +259,23 @@ fun BroadcastFraudDialog(
                                                     modifier = Modifier.size(12.dp)
                                                 )
                                             }
+                                        }
+                                        // Tap to inspect full size
+                                        Surface(
+                                            color = Color.Black.copy(alpha = 0.6f),
+                                            shape = RoundedCornerShape(topStart = 6.dp),
+                                            modifier = Modifier
+                                                .align(Alignment.BottomEnd)
+                                                .clickable { previewPhoto = photoFile }
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Visibility,
+                                                contentDescription = "View Full Picture",
+                                                tint = Color.White,
+                                                modifier = Modifier
+                                                    .size(20.dp)
+                                                    .padding(3.dp)
+                                            )
                                         }
                                     }
                                 }
@@ -333,4 +365,39 @@ fun BroadcastFraudDialog(
             }
         }
     )
+
+    previewPhoto?.let { photo ->
+        EvidencePhotoViewerDialog(
+            photo = photo,
+            onDismiss = { previewPhoto = null },
+            onDelete = {
+                SilentEvidenceCaptureManager.deletePhoto(photo)
+                availablePhotos = SilentEvidenceCaptureManager.getEvidencePhotos(context, phoneNumber)
+                if (selectedPhotoFile?.absolutePath == photo.absolutePath) {
+                    selectedPhotoFile = availablePhotos.firstOrNull()
+                }
+                previewPhoto = null
+            },
+            onShare = {
+                SilentEvidenceCaptureManager.sharePhotos(
+                    context = context,
+                    photos = listOf(photo),
+                    caption = "Evidence photo for suspected fraud ($phoneNumber)"
+                )
+            }
+        )
+    }
+
+    if (showFullGallery) {
+        EvidenceGalleryDialog(
+            initialPhoneNumber = phoneNumber.ifBlank { null },
+            onDismiss = {
+                showFullGallery = false
+                availablePhotos = SilentEvidenceCaptureManager.getEvidencePhotos(context, phoneNumber)
+                if (selectedPhotoFile?.exists() != true) {
+                    selectedPhotoFile = availablePhotos.firstOrNull()
+                }
+            }
+        )
+    }
 }

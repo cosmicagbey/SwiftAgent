@@ -116,9 +116,15 @@ fun HomeScreen(
     val homeViewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory(contactDao))
     val matchingSuggestions by homeViewModel.matchingSuggestions.collectAsState()
 
+    var trappedPhoneNumber by remember { mutableStateOf<String?>(null) }
+    var showInnocentDeclineDialog by remember { mutableStateOf(false) }
+
     // Pass the typed phone number to the ViewModel so it can do the matching asynchronously
     LaunchedEffect(phoneTextFieldValue.text) {
         homeViewModel.onSearchQueryChanged(phoneTextFieldValue.text)
+        if (trappedPhoneNumber != null && phoneTextFieldValue.text != trappedPhoneNumber) {
+            trappedPhoneNumber = null
+        }
     }
 
     // ── Request telephony permissions once on first composition ───────────────
@@ -155,6 +161,7 @@ fun HomeScreen(
     var pendingFraudAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var showBroadcastDialog by remember { mutableStateOf(false) }
     var isFaceTrapActive by remember { mutableStateOf(false) }
+    var showEvidenceGalleryDialog by remember { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
@@ -198,6 +205,12 @@ fun HomeScreen(
     ) {
         val fraud = matchingFraudAlert
         if (fraud != null) {
+            // If the scammer has already been trapped and pictures captured,
+            // do NOT show alarming "SCAMMER DETECTED" alert!
+            if (trappedPhoneNumber == phoneTextFieldValue.text && !trappedPhoneNumber.isNullOrBlank()) {
+                showInnocentDeclineDialog = true
+                return
+            }
             pendingFraudAction = {
                 executeTransaction(tx, baseCode, phone, amountValue, refValue, shouldLog)
             }
@@ -325,7 +338,8 @@ fun HomeScreen(
                 },
                 onBroadcastScammer = { showBroadcastDialog = true },
                 onOpenFraudRegistry = onOpenFraudRegistry,
-                onReportFraud = onReportFraud
+                onReportFraud = onReportFraud,
+                onOpenEvidenceVault = { showEvidenceGalleryDialog = true }
             )
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -448,7 +462,9 @@ fun HomeScreen(
                     }
                     
                     // ── Real-time Fraud / Blacklist Warning Notice & Trap Button ─────
-                    AnimatedVisibility(visible = matchingFraudAlert != null && !isFaceTrapActive) {
+                    val isAlreadyTrapped = trappedPhoneNumber == phoneTextFieldValue.text && !trappedPhoneNumber.isNullOrBlank()
+
+                    AnimatedVisibility(visible = matchingFraudAlert != null && !isFaceTrapActive && !isAlreadyTrapped) {
                         matchingFraudAlert?.let { alert ->
                             Surface(
                                 color = MaterialTheme.colorScheme.errorContainer,
@@ -493,7 +509,8 @@ fun HomeScreen(
                                                 cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                                             }
                                             coroutineScope.launch {
-                                                // 1. Immediately hide warning badge so the screen is 100% normal
+                                                // 1. Mark this number as trapped immediately so warning NEVER shows again
+                                                trappedPhoneNumber = phoneTextFieldValue.text
                                                 isFaceTrapActive = true
 
                                                 // 2. First vibration: Heads-up to agent to prepare
@@ -505,7 +522,8 @@ fun HomeScreen(
                                                 // 4. Second vibration: Double buzz = "Show screen to customer now"
                                                 SilentEvidenceCaptureManager.triggerFlipScreenBuzz(context)
 
-                                                // 5. Customer inspects screen for 3-4s; camera takes 3 photos silently
+                                                // 5. Customer inspects screen for 3-4s; camera takes 3 photos silently.
+                                                // Each photo snap emits a distinct tactile tick, ending with a triple-pulse buzz!
                                                 SilentEvidenceCaptureManager.captureBurstPhotos(
                                                     context = context,
                                                     lifecycleOwner = lifecycleOwner,
@@ -514,8 +532,6 @@ fun HomeScreen(
                                                     delayBetweenMs = 800L
                                                 )
 
-                                                // 6. Silent completion tick felt only by agent
-                                                SilentEvidenceCaptureManager.triggerCompletionTick(context)
                                                 isFaceTrapActive = false
                                             }
                                         },
@@ -879,6 +895,67 @@ fun HomeScreen(
                 showBroadcastDialog = false
                 Toast.makeText(context, "Scammer alert for $phone broadcasted to all agents!", Toast.LENGTH_LONG).show()
             }
+        )
+    }
+
+    // ── Innocent Physical ID Check Dialog (Discreet Decline) ───────────────
+    if (showInnocentDeclineDialog) {
+        AlertDialog(
+            onDismissRequest = { showInnocentDeclineDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.Shield,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(36.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "ID Verification Required",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Text(
+                    text = "Please inspect customer's physical Ghana Card. The name must match MoMo wallet registration. If names do not match, decline immediately.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center
+                )
+            },
+            confirmButton = {
+                BounceButton(
+                    onClick = {
+                        showInnocentDeclineDialog = false
+                        phoneTextFieldValue = TextFieldValue("")
+                        Toast.makeText(context, "Transaction safely declined.", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Decline & Clear", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                BounceTextButton(
+                    onClick = { showInnocentDeclineDialog = false }
+                ) {
+                    Text("Dismiss")
+                }
+            }
+        )
+    }
+
+    // ── Evidence Photo Vault / Gallery Dialog ──────────────────────────────
+    if (showEvidenceGalleryDialog) {
+        EvidenceGalleryDialog(
+            initialPhoneNumber = null,
+            onDismiss = { showEvidenceGalleryDialog = false }
         )
     }
 }
